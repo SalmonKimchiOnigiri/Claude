@@ -53,7 +53,7 @@ b { color: var(--candle); font-weight: 400; }
 #bar .hp { color: var(--blood); }
 #bar .gold { color: var(--candle); }
 #bar .floor { color: var(--muted); }
-#relics { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; min-width: 0; }
+#relics { display: flex; gap: 4px; flex-wrap: wrap; flex: 1; min-width: 56px; }
 .relic { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 35% 30%, #f6d891, var(--candle) 45%, #8a6424); color: var(--ink); font-family: var(--font-title); font-size: 15px; border: 2px solid #5e4418; box-shadow: 0 2px 4px var(--shadow); padding: 0; }
 .relic.big { width: 54px; height: 54px; font-size: 26px; }
 .btn { background: var(--stone-3); border: 1px solid var(--line); border-radius: 6px; padding: 8px 14px; font-size: 15px; transition: background .15s, transform .1s; }
@@ -184,6 +184,22 @@ h2 { font-size: 30px; }
 .ghost { position: fixed; z-index: 60; pointer-events: none; animation: flyaway .45s ease-in forwards; }
 @keyframes flyaway { to { transform: translate(var(--dx), var(--dy)) scale(.5) rotate(8deg); opacity: 0; } }
 
+.act2 #combat, #combat.act2 { background:
+  radial-gradient(ellipse 60% 40% at 50% 92%, rgba(214, 160, 90, .16), transparent 70%),
+  linear-gradient(180deg, #1a1416 0%, #2a2124 55%, #3a2c22 56%, #1c1512 100%); }
+#pots { display: flex; gap: 4px; }
+.pot { width: 30px; height: 30px; padding: 0; border-radius: 6px; background: rgba(0,0,0,.35); border: 1px dashed var(--line); display: grid; place-items: center; }
+.pot svg { width: 24px; height: 24px; }
+button.pot { border-style: solid; }
+button.pot:hover { background: var(--stone-3); }
+.pot.big { width: 46px; height: 46px; }
+.pot.big svg { width: 38px; height: 38px; }
+#potmenu { position: fixed; z-index: 45; width: min(240px, calc(100vw - 32px)); background: var(--stone-2); border: 1px solid var(--candle); border-radius: 8px; padding: 12px; box-shadow: 0 10px 30px var(--shadow); display: flex; flex-direction: column; gap: 8px; }
+#potmenu .t { font-family: var(--font-title); font-size: 18px; }
+#potmenu p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+#potmenu .row { display: flex; gap: 8px; }
+#potmenu .row .btn { flex: 1; padding: 6px 10px; }
+
 /* reward / rest / shop / event */
 .choices { display: flex; flex-wrap: wrap; gap: 18px; justify-content: center; }
 .choices .card { --cw: clamp(110px, 28vw, 150px); }
@@ -242,6 +258,9 @@ h2 { font-size: 30px; }
   #bar { gap: 10px; padding-inline: 12px; }
   #bar .who { display: none; }
   .relic { width: 24px; height: 24px; font-size: 12px; }
+  .pot { width: 26px; height: 26px; }
+  .pot svg { width: 20px; height: 20px; }
+  #bar .stat { font-size: 15px; }
   .field { padding-inline: 8px; }
   .unit { width: clamp(76px, 25vw, 110px); }
   .unit.player { width: 82px; }
@@ -276,6 +295,7 @@ h2 { font-size: 30px; }
   <div id="ovgrid"></div>
   <div id="ovfoot"></div>
 </div>
+<div id="potmenu" hidden></div>
 <div id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -402,7 +422,7 @@ const CARDS = {
 const TYPE_KO = { attack: '공격', skill: '스킬', power: '파워', status: '상태이상', curse: '저주' };
 const POOL = r => Object.keys(CARDS).filter(k => CARDS[k].r === r);
 
-function costOf(c) { const d = CARDS[c.id]; return c.up && d.cu !== undefined ? d.cu : d.c; }
+function costOf(c) { const d = CARDS[c.id]; if (c.rcost !== undefined && typeof d.c === 'number') return c.rcost; return c.up && d.cu !== undefined ? d.cu : d.c; }
 function exhausts(c) { const d = CARDS[c.id]; return typeof d.ex === 'function' ? d.ex(c.up) : !!d.ex; }
 function cardName(c) { return CARDS[c.id].n + (c.up ? '+' : ''); }
 function canUpgrade(c) { return !c.up && !CARDS[c.id].noup; }
@@ -445,11 +465,71 @@ const RELICS = {
   akabeko: { n: '붉은 소', d: '전투 중 첫 공격의 피해가 8 증가합니다.' },
   horn: { n: '뿔피리', d: '3턴째 시작 시 방어도 18을 얻습니다.' },
   idol: { n: '황금 우상', d: '전투에서 얻는 골드가 25% 증가합니다.' },
+  belt: { n: '물약 허리띠', d: '획득 시 물약 슬롯이 2칸 늘어납니다.', onGet: () => { G.potSlots += 2; } },
+  coffee: { n: '커피 드리퍼', boss: 1, en: 1, d: '매 턴 에너지 +1. 모닥불에서 휴식할 수 없습니다.' },
+  stone: { n: '현자의 돌', boss: 1, en: 1, d: '매 턴 에너지 +1. 모든 적이 힘 1을 가지고 시작합니다.' },
+  ecto: { n: '엑토플라즘', boss: 1, en: 1, d: '매 턴 에너지 +1. 더 이상 골드를 얻을 수 없습니다.' },
+  sozu: { n: '소주 잔', boss: 1, en: 1, d: '매 턴 에너지 +1. 더 이상 물약을 얻을 수 없습니다.' },
+  pain: { n: '고통의 낙인', boss: 1, en: 1, d: '매 턴 에너지 +1. 전투 시작 시 뽑을 카드 더미에 상처 2장이 섞입니다.' },
+  blackblood: { n: '검은 피', boss: 1, d: '불타는 피를 대체합니다. 전투가 끝나면 체력을 12 회복합니다.', onGet: () => { G.relics = G.relics.filter(r => r !== 'burning'); } },
 };
+const maxEnergy = () => 3 + G.relics.filter(r => RELICS[r].en).length;
+function addGold(n) { if (has('ecto')) return 0; G.gold += n; return n; }
+
+/* ---------- potions ---------- */
+const POTIONS = {
+  fire: { n: '화염 물약', col: '#e0603c', tg: 1, d: '적 하나에게 피해 20을 줍니다.', u: t => damageEnemy(t, 20) },
+  explosive: { n: '폭발 물약', col: '#f09a3c', d: '모든 적에게 피해 10을 줍니다.', u: () => alive().forEach(e => damageEnemy(e, 10)) },
+  block: { n: '방어 물약', col: '#5fa8c4', d: '방어도 12를 얻습니다.', u: () => { B.block += 12; floatOn('p', '+12', 'blockf'); } },
+  strength: { n: '힘 물약', col: '#c4473a', d: '힘을 2 얻습니다.', u: () => { B.st.str += 2; floatOn('p', '힘 +2', 'small'); } },
+  dex: { n: '민첩 물약', col: '#79b36a', d: '민첩을 2 얻습니다.', u: () => { B.st.dex += 2; floatOn('p', '민첩 +2', 'small'); } },
+  energy: { n: '에너지 물약', col: '#e8b65a', d: '에너지를 2 얻습니다.', u: () => { B.energy += 2; } },
+  swift: { n: '신속 물약', col: '#8fd0e8', d: '카드를 3장 뽑습니다.', u: () => drawCards(3) },
+  weak: { n: '약화 물약', col: '#9a8a6a', tg: 1, d: '적 하나에게 약화 3을 부여합니다.', u: t => debuff(t, 'weak', 3) },
+  fear: { n: '공포 물약', col: '#a77bd6', tg: 1, d: '적 하나에게 취약 3을 부여합니다.', u: t => debuff(t, 'vuln', 3) },
+  blood: { n: '피의 물약', col: '#9b1c2c', any: 1, d: '최대 체력의 20%를 회복합니다. 전투 밖에서도 마실 수 있습니다.', u: () => { const h = heal(Math.floor(G.maxHp * 0.2)); if (B) floatOn('p', `+${h}`, 'heal'); else toast(`체력 +${h}`); } },
+  fairy: { n: '병 속의 요정', col: '#f2c6f0', passive: 1, d: '체력이 0이 되면 자동으로 깨져 최대 체력의 30%로 되살아납니다.' },
+};
+const flask = col => `<svg viewBox="0 0 24 24"><path d="M9 2h6v2h-1v4.2a7 7 0 1 1-4 0V4H9z" fill="${col}" stroke="#111" stroke-width="1.2"/><path d="M8 13a4 4 0 0 0 3 5" stroke="rgba(255,255,255,.6)" stroke-width="1.5" fill="none"/><rect x="9" y="1" width="6" height="2.5" rx="1" fill="#8a6424"/></svg>`;
+function addPotion(id) {
+  if (has('sozu')) { toast('소주 잔 때문에 물약을 얻을 수 없습니다.'); return false; }
+  if (G.potions.length >= G.potSlots) { toast('물약 슬롯이 가득 찼습니다.'); return false; }
+  G.potions.push(id); renderBar(); return true;
+}
+const randomPotion = () => pick(Object.keys(POTIONS));
+function closePotMenu() { $('#potmenu').hidden = true; }
+function openPotMenu(i, anchor) {
+  const id = G.potions[i], p = POTIONS[id];
+  const inFight = B && G.screen === 'combat' && !B.busy && !B.over;
+  const canUse = !p.passive && (inFight || (p.any && !B));
+  const m = $('#potmenu');
+  m.innerHTML = `<span class="t">${p.n}</span><p>${p.d}</p><div class="row">
+    <button class="btn primary" id="potuse" ${canUse ? '' : 'disabled'}>${p.passive ? '자동 사용' : '마시기'}</button>
+    <button class="btn" id="potdrop">버리기</button></div>`;
+  const r = anchor.getBoundingClientRect();
+  m.hidden = false;
+  m.style.left = clamp(r.left, 16, innerWidth - m.offsetWidth - 16) + 'px';
+  m.style.top = (r.bottom + 8) + 'px';
+  $('#potuse').onclick = () => { closePotMenu(); usePotion(i); };
+  $('#potdrop').onclick = () => { closePotMenu(); G.potions.splice(i, 1); if (B) { B.selPot = null; renderCombat(); } else renderBar(); };
+}
+function usePotion(i, target) {
+  const id = G.potions[i], p = POTIONS[id];
+  if (!id) return;
+  if (p.tg && !target) {
+    const a = alive();
+    if (a.length === 1) target = a[0];
+    else { B.selPot = i; B.sel = null; renderCombat(); return; }
+  }
+  G.potions.splice(i, 1);
+  if (B) B.selPot = null;
+  p.u(target);
+  if (B && G.screen === 'combat') { renderCombat(); checkEnd(); } else renderBar();
+}
 function relicHTML(id, big = false) { const r = RELICS[id]; return `<button class="relic ${big ? 'big' : ''}" data-relic="${id}" title="${r.n}: ${r.d}" aria-label="${r.n}">${r.n[0]}</button>`; }
 const has = id => G.relics.includes(id);
 function giveRelic(id) { G.relics.push(id); RELICS[id].onGet?.(); }
-function randomRelic() { const pool = Object.keys(RELICS).filter(k => !RELICS[k].starter && !has(k)); return pool.length ? pick(pool) : null; }
+function randomRelic() { const pool = Object.keys(RELICS).filter(k => !RELICS[k].starter && !RELICS[k].boss && !has(k)); return pool.length ? pick(pool) : null; }
 function upgradeRandom(type, n) { shuffle(G.deck.filter(c => CARDS[c.id].t === type && canUpgrade(c))).slice(0, n).forEach(c => { c.up = true; }); }
 
 /* ---------- enemies ---------- */
@@ -469,6 +549,20 @@ const SPR = {
   laga: '<svg viewBox="0 0 120 120"><path d="M8 108c4-52 26-80 52-80s48 28 52 80z" fill="#4a5a58"/><path d="M20 100c4-40 20-60 40-62M100 100c-4-40-20-60-40-62" stroke="#6f8582" stroke-width="5" fill="none"/><path d="M34 70h52" stroke="#2a3433" stroke-width="6"/><rect x="40" y="66" width="40" height="10" fill="#14191a"/><circle cx="50" cy="71" r="3" fill="#ff7a4a"/><circle cx="70" cy="71" r="3" fill="#ff7a4a"/></svg>',
   sentry: '<svg viewBox="0 0 120 120"><path d="M60 8l36 100H24z" fill="#8d8a7a"/><path d="M60 8l36 100H60z" fill="#6e6b5e"/><circle cx="60" cy="66" r="14" fill="#1c1c1c"/><circle cx="60" cy="66" r="7" fill="#7fe0ff"/><path d="M40 98h40" stroke="#4a473e" stroke-width="5"/></svg>',
   hexa: '<svg viewBox="0 0 120 120"><g fill="#7ad0ff" opacity=".9"><circle cx="60" cy="14" r="8"/><circle cx="100" cy="37" r="8"/><circle cx="100" cy="83" r="8"/><circle cx="60" cy="106" r="8"/><circle cx="20" cy="83" r="8"/><circle cx="20" cy="37" r="8"/></g><path d="M60 30c14 14 22 24 22 36a22 22 0 0 1-44 0c0-12 8-22 22-36z" fill="#4a3a8a"/><path d="M60 42c8 9 12 15 12 24a12 12 0 0 1-24 0c0-9 4-15 12-24z" fill="#9a7aff"/><circle cx="54" cy="66" r="3" fill="#fff"/><circle cx="66" cy="66" r="3" fill="#fff"/></svg>',
+  byrd: '<svg viewBox="0 0 120 120"><path d="M20 60c20-30 40-20 40 0-0-20 20-30 40 0-14-6-26 0-40 14C46 60 34 54 20 60z" fill="#2a2a3a"/><ellipse cx="60" cy="72" rx="16" ry="20" fill="#3a3a52"/><circle cx="60" cy="54" r="11" fill="#3a3a52"/><path d="M60 56l12 4-12 4z" fill="#e8b65a"/><circle cx="56" cy="52" r="2.5" fill="#ff5a3a"/><path d="M54 92l-4 10M66 92l4 10" stroke="#e8b65a" stroke-width="3"/></svg>',
+  chosen: '<svg viewBox="0 0 120 120"><path d="M28 114l10-58h44l10 58z" fill="#5a1e3a"/><path d="M38 56l22 18 22-18" fill="none" stroke="#e8b65a" stroke-width="3"/><circle cx="60" cy="38" r="17" fill="#6a2a4a"/><path d="M43 38a17 17 0 0 1 34 0l-6-14-11 6-11-6z" fill="#3a0e22"/><circle cx="53" cy="40" r="3" fill="#ffd36a"/><circle cx="67" cy="40" r="3" fill="#ffd36a"/><path d="M90 50l10-24M86 52l10 6" stroke="#c99af0" stroke-width="4"/></svg>',
+  parasite: '<svg viewBox="0 0 120 120"><path d="M10 100c0-36 22-62 50-62s50 26 50 62z" fill="#8a6a4a"/><path d="M20 98c2-26 18-48 40-50M100 98c-2-26-18-48-40-50M60 40v60" stroke="#5a4028" stroke-width="5" fill="none"/><path d="M48 100c0-14 24-14 24 0" fill="#d06aa0"/><circle cx="54" cy="96" r="2" fill="#000"/><circle cx="66" cy="96" r="2" fill="#000"/></svg>',
+  sphere: '<svg viewBox="0 0 120 120"><circle cx="60" cy="64" r="40" fill="#8d8a7a"/><path d="M20 64h80M60 24v80" stroke="#5e5b50" stroke-width="5"/><circle cx="60" cy="64" r="16" fill="#1c1c1c"/><circle cx="60" cy="64" r="8" fill="#ffb15a"/><circle cx="60" cy="64" r="46" fill="none" stroke="#8fd0e8" stroke-width="3" stroke-dasharray="6 6" opacity=".7"/></svg>',
+  centurion: '<svg viewBox="0 0 120 120"><path d="M34 112l6-52h40l6 52z" fill="#8a2f29"/><rect x="38" y="60" width="44" height="26" rx="4" fill="#b88a3a"/><circle cx="60" cy="40" r="17" fill="#c69c7a"/><path d="M42 40a18 18 0 0 1 36 0v-4H42z" fill="#b88a3a"/><path d="M50 22c6-10 14-10 20 0" stroke="#cf4b3c" stroke-width="7" fill="none"/><rect x="47" y="40" width="26" height="4" fill="#222"/><path d="M20 58h16v34H20z" fill="#b88a3a" stroke="#6a4a1a" stroke-width="2"/><path d="M90 48l14-28" stroke="#ccc" stroke-width="5"/></svg>',
+  mystic: '<svg viewBox="0 0 120 120"><path d="M34 112l10-60h32l10 60z" fill="#e4d9b8"/><path d="M44 52l16 12 16-12" fill="none" stroke="#5fa8c4" stroke-width="3"/><circle cx="60" cy="38" r="15" fill="#c69c7a"/><path d="M44 36c0-16 32-16 32 0l-4-8H48z" fill="#e4d9b8"/><circle cx="55" cy="40" r="2.5" fill="#222"/><circle cx="65" cy="40" r="2.5" fill="#222"/><path d="M90 30v80" stroke="#6b4a2a" stroke-width="4"/><circle cx="90" cy="28" r="8" fill="#8fd0e8"/></svg>',
+  snakeplant: '<svg viewBox="0 0 120 120"><path d="M44 112c0-30 4-50 16-60 12 10 16 30 16 60z" fill="#4a7a3a"/><path d="M24 50c0-22 36-28 36-6 0-22 36-16 36 6 0 18-16 26-36 26S24 68 24 50z" fill="#6aa04a"/><path d="M34 54h52" stroke="#2a0d09" stroke-width="7"/><path d="M38 51l4 6 4-6 4 6 4-6 4 6 4-6 4 6 4-6 4 6 4-6" stroke="#f0e2c0" stroke-width="2" fill="none"/><circle cx="44" cy="42" r="4" fill="#ffde59"/><circle cx="76" cy="42" r="4" fill="#ffde59"/></svg>',
+  snecko: '<svg viewBox="0 0 120 120"><path d="M30 110c-6-30 6-56 30-60 26 4 36 30 30 60z" fill="#4a8aa0"/><ellipse cx="60" cy="42" rx="26" ry="22" fill="#5aa0b8"/><circle cx="60" cy="40" r="15" fill="#fff"/><circle cx="60" cy="40" r="9" fill="#a77bd6"/><circle cx="60" cy="40" r="4" fill="#000"/><path d="M44 60q16 8 32 0" stroke="#1d3a44" stroke-width="3" fill="none"/><path d="M90 96c14 0 18-10 22-18" stroke="#4a8aa0" stroke-width="8" fill="none"/></svg>',
+  slaverR: '<svg viewBox="0 0 120 120"><path d="M36 112l6-50h36l6 50z" fill="#8a2f29"/><rect x="40" y="58" width="40" height="10" fill="#6b4a2a"/><circle cx="60" cy="40" r="17" fill="#c69c7a"/><path d="M43 36h34v-8a17 14 0 0 0-34 0z" fill="#3d2222"/><rect x="46" y="38" width="28" height="5" fill="#111"/><path d="M84 70l22-30" stroke="#bbb" stroke-width="5"/><path d="M80 76l8-10" stroke="#6b4a2a" stroke-width="6"/></svg>',
+  taskmaster: '<svg viewBox="0 0 120 120"><path d="M24 114c0-38 14-60 36-60s36 22 36 60z" fill="#3a3a2a"/><circle cx="60" cy="38" r="20" fill="#b88a6a"/><path d="M40 34h40l-4-14H44z" fill="#222"/><path d="M48 40h8M64 40h8" stroke="#222" stroke-width="3"/><path d="M50 50q10 4 20 0" stroke="#5a2a1a" stroke-width="3" fill="none"/><path d="M92 70c16 4 20 20 10 34" stroke="#6b4a2a" stroke-width="4" fill="none"/></svg>',
+  book: '<svg viewBox="0 0 120 120"><path d="M14 30l46 10 46-10v70l-46 10-46-10z" fill="#5a2a1a"/><path d="M20 34l40 9v62l-40-9zM100 34l-40 9v62l40-9z" fill="#e4d9b8"/><path d="M28 50l24 5M28 62l24 5M68 55l24-5M68 67l24-5" stroke="#8a7a5a" stroke-width="2"/><circle cx="60" cy="28" r="9" fill="#cf4b3c"/><circle cx="60" cy="28" r="4" fill="#ffde59"/><path d="M100 30l16-22M108 40l10-6M10 30L2 14" stroke="#ddd" stroke-width="4"/></svg>',
+  champ: '<svg viewBox="0 0 120 120"><path d="M18 114c0-40 16-64 42-64s42 24 42 64z" fill="#b88a3a"/><path d="M30 70h60v20H30z" fill="#8a2f29"/><circle cx="60" cy="36" r="20" fill="#c69c7a"/><path d="M38 34a22 22 0 0 1 44 0l-6-4-16-12-16 12z" fill="#e8b65a"/><path d="M60 8v12" stroke="#cf4b3c" stroke-width="6"/><rect x="46" y="34" width="28" height="5" fill="#222"/><path d="M98 20l8 4-24 64-6-3z" fill="#ddd"/></svg>',
+  automaton: '<svg viewBox="0 0 120 120"><rect x="28" y="50" width="64" height="60" rx="8" fill="#a07a3a"/><rect x="36" y="58" width="48" height="12" fill="#6a4e22"/><rect x="40" y="16" width="40" height="34" rx="6" fill="#c8984a"/><rect x="46" y="26" width="28" height="10" fill="#111"/><circle cx="54" cy="31" r="3" fill="#7fe0ff"/><circle cx="66" cy="31" r="3" fill="#7fe0ff"/><path d="M28 60L8 90M92 60l20 30" stroke="#a07a3a" stroke-width="10"/><circle cx="60" cy="88" r="10" fill="#7fe0ff" opacity=".8"/></svg>',
+  orb: '<svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="34" fill="#c8984a"/><circle cx="60" cy="60" r="22" fill="#6a4e22"/><circle cx="60" cy="60" r="12" fill="#7fe0ff"/><path d="M60 16v10M60 94v10M16 60h10M94 60h10" stroke="#c8984a" stroke-width="6"/></svg>',
   player: '<svg viewBox="0 0 120 120"><path d="M30 114l8-50h44l8 50z" fill="#6a2a24"/><path d="M38 64l-12 20 10 4 8-16zM82 64l12 20-10 4-8-16z" fill="#8a8f90"/><rect x="40" y="62" width="40" height="34" rx="4" fill="#9aa0a0"/><path d="M44 70h32M44 80h32" stroke="#5e6464" stroke-width="3"/><circle cx="60" cy="42" r="17" fill="#d8a888"/><path d="M42 40c0-14 8-22 18-22s18 8 18 22l-6-6-12 2-12-2z" fill="#3a2a20"/><path d="M52 44h5M63 44h5" stroke="#222" stroke-width="3"/><path d="M96 20l4 3-16 40-4-2z" fill="#d7d7d7"/><path d="M84 58l10 5" stroke="#6b4a2a" stroke-width="5"/></svg>',
 };
 
@@ -504,7 +598,7 @@ const ENEMIES = {
     return e.flip ? A('전격', 9) : M('광선', 'deb', () => addStatus('dazed', 2));
   } },
 
-  slimeBoss: { n: '슬라임 보스', hp: [140, 140], spr: 'boss', sz: 'large', boss: 1, split: 1, ai: e => {
+  slimeBoss: { n: '슬라임 보스', hp: [140, 140], spr: 'boss', sz: 'large', boss: 1, onHurt: e => { if (!e.splitting && e.hp <= e.maxHp / 2) { e.splitting = 1; setPending(e, M('분열', 'unk', e => { e.dead = true; e.gone = true; spawnAfter(e, ['acidL', 'spikeL'], e.hp); })); floatOn(e, '분열 준비!', 'small'); } }, ai: e => {
     const n = e.cyc = ((e.cyc || 0) % 3) + 1;
     if (n === 1) return M('점액 분사', 'deb', () => addStatus('slimed', 3));
     if (n === 2) return M('준비', 'unk', () => {});
@@ -526,17 +620,88 @@ const ENEMIES = {
   } },
 };
 
-const ENC = {
-  easy: [['jaw'], ['cultist'], ['louseR', 'louseG'], ['acidM', 'spikeM']],
-  hard: [['slaver'], ['fungi', 'fungi'], ['louseR', 'louseG', 'louseR'], ['jaw', 'spikeM'], ['cultist', 'louseG'], ['slaver', 'louseR'], ['acidL']],
-  elite: [['nob'], ['laga'], ['sentry', 'sentry', 'sentry']],
-  boss: [['slimeBoss'], ['hexa']],
-};
+Object.assign(ENEMIES, {
+  byrd: { n: '흑조', hp: [25, 31], spr: 'byrd', sz: 'small', ai: (e, t) => t === 1 ? M('까악', 'buff', e => { e.st.str += 1; }) : pick([A('쪼기', 1, 5), A('급강하', 12), M('까악', 'buff', e => { e.st.str += 1; })].filter(o => o.nm !== e.last)) },
+  chosen: { n: '선택받은 자', hp: [95, 99], spr: 'chosen', ai: (e, t) => {
+    if (t === 1) return A('찌르기', 5, 2);
+    if (t === 2) return M('흡수', 'deb', e => { playerDebuff('weak', 3); e.st.str += 3; floatOn(e, '힘 +3', 'small'); });
+    return t % 2 ? { nm: '쇠약', it: 'atkdeb', dmg: 10, times: 1, fx: () => playerDebuff('vuln', 2) } : A('번개', 18);
+  } },
+  parasite: { n: '껍질 기생충', hp: [68, 72], spr: 'parasite', init: e => { e.block = 14; }, ai: e => pick([
+    A('이중 타격', 6, 2),
+    A('흡혈', 10, 1, e => { const h = Math.min(10, e.maxHp - e.hp); e.hp += h; if (h) floatOn(e, `+${h}`, 'heal'); }),
+    { nm: '쓰러뜨리기', it: 'atkdeb', dmg: 18, times: 1, fx: () => playerDebuff('frail', 2) },
+  ].filter(o => o.nm !== e.last)) },
+  sphere: { n: '구체 수호자', hp: [20, 20], spr: 'sphere', init: e => { e.block = 40; e.st.barricade = 1; }, ai: (e, t) => {
+    if (t === 1) return M('활성화', 'def', e => enemyBlock(e, 25));
+    if (t === 2) return { nm: '약화 광선', it: 'atkdeb', dmg: 10, times: 1, fx: () => playerDebuff('frail', 5) };
+    return t % 2 ? A('강타', 10, 2) : { nm: '경화', it: 'atkdef', dmg: 10, times: 1, fx: e => enemyBlock(e, 15) };
+  } },
+  centurion: { n: '백부장', hp: [76, 80], spr: 'centurion', ai: e => {
+    const allies = alive().filter(x => x !== e);
+    if (allies.length && Math.random() < 0.4 && e.last !== '방패') return M('방패', 'def', e => { const a = alive().filter(x => x !== e); enemyBlock(a.length ? pick(a) : e, 15); });
+    return allies.length ? A('베기', 12) : A('격노', 6, 3);
+  } },
+  mystic: { n: '신비술사', hp: [48, 56], spr: 'mystic', ai: e => {
+    const hurt = alive().reduce((s, x) => s + x.maxHp - x.hp, 0);
+    if (hurt >= 16 && e.last !== '치유') return M('치유', 'buff', () => alive().forEach(x => { const h = Math.min(16, x.maxHp - x.hp); x.hp += h; if (h) floatOn(x, `+${h}`, 'heal'); }));
+    if (Math.random() < 0.4 && e.last !== '축복') return M('축복', 'buff', () => alive().forEach(x => { x.st.str += 2; floatOn(x, '힘 +2', 'small'); }));
+    return { nm: '공격', it: 'atkdeb', dmg: 8, times: 1, fx: () => playerDebuff('frail', 2) };
+  } },
+  snakeplant: { n: '뱀 식물', hp: [75, 79], spr: 'snakeplant', ai: e => (e.hist.slice(-2).filter(h => h === '씹기').length === 2 || Math.random() < 0.3) && e.last !== '약화 포자' ? M('약화 포자', 'deb', () => { playerDebuff('frail', 2); playerDebuff('weak', 2); }) : A('씹기', 7, 3) },
+  snecko: { n: '스네코', hp: [114, 120], spr: 'snecko', ai: (e, t) => {
+    if (t === 1) return M('현혹의 눈빛', 'deb', () => { B.st.confused = 1; floatOn('p', '혼란!', 'small'); });
+    return (Math.random() < 0.4 && e.last !== '꼬리 채찍') ? { nm: '꼬리 채찍', it: 'atkdeb', dmg: 8, times: 1, fx: () => { playerDebuff('vuln', 2); playerDebuff('weak', 2); } } : A('물기', 15);
+  } },
+  slaverR: { n: '붉은 노예상', hp: [46, 50], spr: 'slaverR', ai: (e, t) => t === 1 ? A('찌르기', 13) : pick([A('찌르기', 13), { nm: '긁기', it: 'atkdeb', dmg: 8, times: 1, fx: () => playerDebuff('vuln', 1) }].filter(o => o.nm !== e.last)) },
 
+  taskmaster: { n: '노예 감독', hp: [54, 60], spr: 'taskmaster', ai: (e, t) => ({ nm: '채찍질', it: 'atkdeb', dmg: 7 + Math.floor((t - 1) / 3) * 2, times: 1, fx: () => addStatus('wound', 1) }) },
+  book: { n: '찌르기의 서', hp: [160, 164], spr: 'book', sz: 'large', init: e => { e.stabs = 1; }, ai: e => {
+    if (e.last !== '크게 찌르기' && Math.random() < 0.25) return A('크게 찌르기', 21);
+    e.stabs++; return A('연속 찌르기', 6, e.stabs);
+  } },
+
+  champ: { n: '챔피언', hp: [260, 260], spr: 'champ', sz: 'large', boss: 1,
+    onHurt: e => { if (!e.angry && e.hp <= e.maxHp / 2) { e.angry = 1; setPending(e, M('분노', 'buff', e => { e.st.weak = 0; e.st.vuln = 0; e.st.str += 6; e.exec = 1; e.c2 = 0; })); floatOn(e, '분노!', 'small'); } },
+    ai: (e, t) => {
+      const slap = { nm: '뺨 때리기', it: 'atkdeb', dmg: 12, times: 1, fx: () => { playerDebuff('frail', 2); playerDebuff('vuln', 2); } };
+      if (e.exec) { e.c2++; return e.c2 % 2 ? A('처형', 10, 2) : pick([A('무거운 베기', 16), slap]); }
+      return [M('방어 태세', 'def', e => enemyBlock(e, 18)), slap, A('무거운 베기', 16), M('도발', 'buff', e => { e.st.str += 2; floatOn(e, '힘 +2', 'small'); }), slap, A('무거운 베기', 16)][(t - 1) % 6];
+    } },
+  automaton: { n: '청동 자동인형', hp: [250, 250], spr: 'automaton', sz: 'large', boss: 1, ai: (e, t) => {
+    if (t === 1) return M('구체 생성', 'unk', e => spawnAfter(e, ['orb', 'orb']));
+    return [A('휘두르기', 7, 2), M('증폭', 'defbuff', e => { e.st.str += 3; enemyBlock(e, 9); }), A('휘두르기', 7, 2), M('증폭', 'defbuff', e => { e.st.str += 3; enemyBlock(e, 9); }), A('초광선', 45), M('과열', 'stun', () => {})][(t - 2) % 6];
+  } },
+  orb: { n: '청동 구체', hp: [52, 58], spr: 'orb', sz: 'small', minion: 1, ai: e => (Math.random() < 0.5 && e.last !== '지원') ? M('지원', 'def', () => { const b = B.enemies.find(x => x.key === 'automaton' && !x.dead); if (b) enemyBlock(b, 12); }) : A('광선', 8) },
+});
+
+const ENC = {
+  1: {
+    easy: [['jaw'], ['cultist'], ['louseR', 'louseG'], ['acidM', 'spikeM']],
+    hard: [['slaver'], ['fungi', 'fungi'], ['louseR', 'louseG', 'louseR'], ['jaw', 'spikeM'], ['cultist', 'louseG'], ['slaver', 'louseR'], ['acidL']],
+    elite: [['nob'], ['laga'], ['sentry', 'sentry', 'sentry']],
+    boss: [['slimeBoss'], ['hexa']],
+  },
+  2: {
+    easy: [['byrd', 'byrd', 'byrd'], ['chosen'], ['parasite'], ['sphere'], ['slaverR', 'slaver']],
+    hard: [['centurion', 'mystic'], ['snakeplant'], ['snecko'], ['chosen', 'byrd'], ['cultist', 'cultist', 'cultist'], ['sphere', 'byrd'], ['parasite', 'louseR']],
+    elite: [['book'], ['slaverR', 'taskmaster', 'slaver']],
+    boss: [['champ'], ['automaton']],
+  },
+};
+const ACT_NAME = { 1: '지하 묘지', 2: '도시' };
+
+function setPending(e, m) { e.intent = m; e.pending = m; }
+function spawnAfter(e, keys, hp) {
+  const i = B.enemies.indexOf(e);
+  const fresh = keys.map(k => spawn(k, hp));
+  B.enemies.splice(i + 1, 0, ...fresh);
+  fresh.forEach(n => { n.turn = 1; if (has('stone')) n.st.str += 1; n.intent = ENEMIES[n.key].ai(n, 1); n.skipRound = 1; });
+}
 function spawn(key, hpOverride) {
   const d = ENEMIES[key];
   const hp = hpOverride ?? rint(d.hp[0], d.hp[1]);
-  const e = { key, n: d.n, hp, maxHp: hpOverride ?? hp, block: 0, st: { str: 0, vuln: 0, weak: 0 }, hist: [], last: null, turn: 0, dead: false, id: 'e' + (uidN++) };
+  const e = { key, n: d.n, hp, maxHp: hpOverride ?? hp, block: 0, minion: !!d.minion, st: { str: 0, vuln: 0, weak: 0 }, hist: [], last: null, turn: 0, dead: false, id: 'e' + (uidN++) };
   d.init?.(e);
   return e;
 }
@@ -586,12 +751,20 @@ function genMap() {
 
 /* ---------- run flow ---------- */
 function newRun() {
-  G = { hp: 80, maxHp: 80, gold: 99, deck: [], relics: [], map: genMap(), pos: null, path: [], bossKey: pick(ENC.boss), floor: 0, kills: 0, elites: 0, removeCost: 75, screen: 'map' };
+  G = { act: 1, hp: 80, maxHp: 80, gold: 99, deck: [], relics: [], potions: [], potSlots: 3, potChance: 40, map: genMap(), pos: null, path: [], bossKey: pick(ENC[1].boss), floor: 0, kills: 0, elites: 0, removeCost: 75, screen: 'map' };
   for (let i = 0; i < 5; i++) G.deck.push(mk('strike'));
   for (let i = 0; i < 4; i++) G.deck.push(mk('defend'));
   G.deck.push(mk('bash'));
   giveRelic('burning');
+  G.potions.push(randomPotion());
   showMap();
+}
+
+function startAct(n) {
+  G.act = n; G.map = genMap(); G.pos = null; G.path = []; G.bossKey = pick(ENC[n].boss);
+  G.hp = G.maxHp;
+  showMap();
+  banner(`${n}막 · ${ACT_NAME[n]}`);
 }
 
 function renderBar() {
@@ -602,11 +775,15 @@ function renderBar() {
     <span class="stat hp" title="체력">${IC.heart}${G.hp}/${G.maxHp}</span>
     <span class="stat gold" title="골드">${IC.coin}${G.gold}</span>
     <span class="stat floor" title="층">${IC.tower}${G.floor}층</span>
+    <div id="pots">${Array.from({ length: G.potSlots }, (_, i) => { const id = G.potions[i]; return id ? `<button class="pot" data-pot="${i}" title="${POTIONS[id].n}: ${POTIONS[id].d}" aria-label="${POTIONS[id].n}">${flask(POTIONS[id].col)}</button>` : '<span class="pot" aria-hidden="true"></span>'; }).join('')}</div>
     <div id="relics">${G.relics.map(r => relicHTML(r)).join('')}</div>
     <button class="btn" id="deckbtn" title="덱 보기">덱 ${G.deck.length}</button>`;
   $('#deckbtn').onclick = () => showPile('나의 덱', G.deck);
+  bar.querySelectorAll('[data-pot]').forEach(b => b.onclick = ev => { ev.stopPropagation(); openPotMenu(+b.dataset.pot, b); });
+  document.body.classList.toggle('act2', G.act === 2);
 }
 document.addEventListener('click', e => {
+  if (!e.target.closest('#potmenu')) closePotMenu();
   const r = e.target.closest('[data-relic]');
   if (r && !r.closest('.reward') && !r.closest('.relicoffer')) { const d = RELICS[r.dataset.relic]; toast(`<b>${d.n}</b><br>${d.d}`); }
 });
@@ -645,7 +822,7 @@ function showMap() {
   for (let r = 0; r < ROWS; r++) for (const n of G.map[r]) if (n) nodes += nodeSvg(n, 17);
   nodes += nodeSvg(boss, 34);
   setScreen(`<div id="map"><div class="scroll">
-    <h2>첨탑 1막 · 지하 묘지</h2>
+    <h2>첨탑 ${G.act}막 · ${ACT_NAME[G.act]}</h2>
     <p style="text-align:center;margin:2px 0 0;font-size:14px">이 막의 보스: <b style="color:#8a1f14">${ENEMIES[G.bossKey[0]].n}</b></p>
     <div class="legend">${Object.keys(NODE_KO).map(k => `<span><i>${NODE_KO[k]}</i>${NODE_NAME[k]}</span>`).join('')}</div>
     <svg id="mapsvg" viewBox="0 0 ${W} ${H}" role="img" aria-label="첨탑 지도">${edges}${nodes}</svg>
@@ -668,10 +845,10 @@ function enterNode(r, c) {
   const n = r === ROWS ? { r, c, type: 'B' } : G.map[r][c];
   G.pos = { r, c };
   (G.path ||= []).push({ r, c });
-  G.floor = r + 1;
+  G.floor = (G.act - 1) * (ROWS + 1) + r + 1;
   switch (n.type) {
-    case 'M': startCombat(pick(G.floor <= 3 ? ENC.easy : ENC.hard), 'M'); break;
-    case 'E': startCombat(pick(ENC.elite), 'E'); break;
+    case 'M': startCombat(pick(r < 3 ? ENC[G.act].easy : ENC[G.act].hard), 'M'); break;
+    case 'E': startCombat(pick(ENC[G.act].elite), 'E'); break;
     case 'B': startCombat(G.bossKey, 'B'); break;
     case 'R': showRest(); break;
     case 'S': showShop(); break;
@@ -709,16 +886,7 @@ function damageEnemy(e, d) {
     ENEMIES[e.key].onDie?.(e);
     return true;
   }
-  if (ENEMIES[e.key].split && !e.splitting && e.hp <= e.maxHp / 2) {
-    e.splitting = 1;
-    e.intent = M('분열', 'unk', e => {
-      e.dead = true; e.gone = true;
-      const i = B.enemies.indexOf(e);
-      B.enemies.splice(i + 1, 0, spawn('acidL', e.hp), spawn('spikeL', e.hp));
-      B.enemies.slice(i + 1, i + 3).forEach(n => { n.intent = ENEMIES[n.key].ai(n, 1); });
-    });
-    floatOn(e, '분열 준비!', 'small');
-  }
+  ENEMIES[e.key].onHurt?.(e);
   return false;
 }
 
@@ -738,7 +906,13 @@ function enemyBlock(e, n) { e.block += n; floatOn(e, `+${n}`, 'blockf'); }
 function debuff(e, k, n) { if (!e || e.dead) return; e.st[k] = (e.st[k] || 0) + n; floatOn(e, `${ST_KO[k]} ${n}`, 'small'); }
 function playerDebuff(k, n) { B.st[k] += n; floatOn('p', `${ST_KO[k]} ${n}`, 'small'); }
 function addStatus(id, n) { for (let i = 0; i < n; i++) B.discard.push(mk(id)); floatOn('p', `${CARDS[id].n} +${n}`, 'small'); }
-function loseHp(n) { G.hp -= n; B.hits.add('p'); floatOn('p', String(n)); if (G.hp <= 0) { G.hp = 0; B.dying = true; } }
+function deathCheck() {
+  if (G.hp > 0) return;
+  const f = G.potions.indexOf('fairy');
+  if (f >= 0) { G.potions.splice(f, 1); G.hp = Math.max(1, Math.floor(G.maxHp * 0.3)); floatOn('p', `요정! +${G.hp}`, 'heal'); return; }
+  G.hp = 0; B.dying = true;
+}
+function loseHp(n) { G.hp -= n; B.hits.add('p'); floatOn('p', String(n)); deathCheck(); }
 function heal(n) { const before = G.hp; G.hp = Math.min(G.maxHp, G.hp + n); return G.hp - before; }
 
 function damagePlayer(d, attacker) {
@@ -747,7 +921,7 @@ function damagePlayer(d, attacker) {
   B.hits.add('p');
   if (rest > 0) { G.hp -= rest; floatOn('p', String(rest)); } else floatOn('p', '막음', 'blockf');
   if (attacker && has('scales')) damageEnemy(attacker, 3);
-  if (G.hp <= 0) { G.hp = 0; B.dying = true; }
+  deathCheck();
 }
 function enemyAtk(e, base) {
   let v = base + e.st.str;
@@ -765,6 +939,7 @@ function drawCards(n) {
     reshuffleIfNeeded();
     if (!B.draw.length) break;
     const c = B.draw.pop();
+    if (B.st.confused) c.rcost = rnd(4);
     if (B.hand.length >= 10) B.discard.push(c); else B.hand.push(c);
   }
 }
@@ -779,8 +954,9 @@ function autoPlay(c) {
 }
 function onSkill() { alive().forEach(e => { if (e.st.enrage) { e.st.str += e.st.enrage; floatOn(e, `힘 +${e.st.enrage}`, 'small'); } }); }
 
-const ST_KO = { str: '힘', dex: '민첩', vuln: '취약', weak: '약화', frail: '손상', metal: '금속화', demon: '악마화', combust: '연소', ritual: '의식', enrage: '격노', flex: '근육', barricade: '바리케이드' };
+const ST_KO = { confused: '혼란', str: '힘', dex: '민첩', vuln: '취약', weak: '약화', frail: '손상', metal: '금속화', demon: '악마화', combust: '연소', ritual: '의식', enrage: '격노', flex: '근육', barricade: '바리케이드' };
 const ST_DESC = {
+  confused: '카드를 뽑을 때마다 비용이 0~3 중 무작위로 바뀝니다.',
   str: '공격 피해가 이만큼 증가합니다.', dex: '얻는 방어도가 이만큼 증가합니다.', vuln: '받는 공격 피해가 50% 증가합니다.', weak: '주는 공격 피해가 25% 감소합니다.',
   frail: '얻는 방어도가 25% 감소합니다.', metal: '턴 종료 시 방어도를 얻습니다.', demon: '턴 시작 시 힘을 얻습니다.', combust: '턴 종료 시 체력 1을 잃고 모든 적에게 피해를 줍니다.',
   ritual: '턴 종료 시 힘을 얻습니다.', enrage: '플레이어가 스킬을 사용하면 힘을 얻습니다.', flex: '턴 종료 시 이만큼 힘을 잃습니다.', barricade: '방어도가 턴 시작 시 사라지지 않습니다.',
@@ -790,6 +966,7 @@ function stsHTML(st, extra = '') {
   let h = '';
   for (const k of Object.keys(ST_KO)) {
     const v = st[k]; if (!v || k === 'flex') continue;
+    if (k === 'confused') { h += `<span class="st bad" title="혼란: ${ST_DESC[k]}">혼란</span>`; continue; }
     const isGood = good.includes(k) || ((k === 'str' || k === 'dex') && v > 0);
     h += `<span class="st ${isGood ? 'good' : 'bad'}" data-st="${k}" title="${ST_KO[k]}: ${ST_DESC[k]}">${ST_KO[k]}${k === 'barricade' ? '' : ' ' + v}</span>`;
   }
@@ -809,14 +986,17 @@ function startCombat(keys, kind) {
   B = {
     kind, enemies: keys.map(k => spawn(k)), draw: shuffle(G.deck.map(c => ({ ...c }))), hand: [], discard: [], exhaust: [],
     energy: 0, block: 0, turn: 0, busy: false, sel: null, hits: new Set(), over: false, dying: false,
-    st: { str: 0, dex: 0, vuln: 0, weak: 0, frail: 0, metal: 0, demon: 0, combust: 0, flex: 0, noDraw: 0, barricade: 0 },
+    selPot: null, maxE: maxEnergy(),
+    st: { confused: 0, str: 0, dex: 0, vuln: 0, weak: 0, frail: 0, metal: 0, demon: 0, combust: 0, flex: 0, noDraw: 0, barricade: 0 },
   };
   G.screen = 'combat';
   if (has('vajra')) B.st.str += 1;
+  if (has('stone')) B.enemies.forEach(e => { e.st.str += 1; });
+  if (has('pain')) for (let i = 0; i < 2; i++) B.draw.splice(rnd(B.draw.length + 1), 0, mk('wound'));
   if (has('vial')) heal(2);
   B.enemies.forEach(e => { e.turn = 1; e.intent = ENEMIES[e.key].ai(e, 1); });
-  setScreen(`<div id="combat"><div class="field" id="field"></div><div class="dock" id="dock"></div></div>`);
-  $('#combat').addEventListener('click', () => { if (B && B.sel !== null) { B.sel = null; renderCombat(); } });
+  setScreen(`<div id="combat" class="${G.act === 2 ? 'act2' : ''}"><div class="field" id="field"></div><div class="dock" id="dock"></div></div>`);
+  $('#combat').addEventListener('click', () => { if (B && (B.sel !== null || B.selPot !== null)) { B.sel = null; B.selPot = null; renderCombat(); } });
   banner(kind === 'B' ? '보스 전투' : kind === 'E' ? '정예 전투' : '전투 시작');
   startTurn();
 }
@@ -825,7 +1005,7 @@ function startTurn() {
   B.turn++;
   if (!B.st.barricade) B.block = 0;
   B.st.noDraw = 0;
-  B.energy = 3 + (B.turn === 1 && has('lantern') ? 1 : 0);
+  B.energy = B.maxE + (B.turn === 1 && has('lantern') ? 1 : 0);
   if (B.turn === 1 && has('anchor')) B.block += 10;
   if (B.turn === 3 && has('horn')) B.block += 18;
   if (B.st.demon) B.st.str += B.st.demon;
@@ -838,7 +1018,7 @@ function renderCombat() {
   if (!B || G.screen !== 'combat') return;
   const field = $('#field'), dock = $('#dock');
   const selCard = B.sel !== null ? B.hand[B.sel] : null;
-  const targeting = selCard && CARDS[selCard.id].tg;
+  const targeting = (selCard && CARDS[selCard.id].tg) || B.selPot !== null;
   const unit = (u, isP) => {
     const hp = isP ? G.hp : u.hp, max = isP ? G.maxHp : u.maxHp, blk = isP ? B.block : u.block;
     const id = isP ? 'u-p' : 'u-' + u.id;
@@ -854,7 +1034,7 @@ function renderCombat() {
       <div class="sts">${stsHTML(isP ? B.st : u.st, extra)}</div>
     </div>`;
   };
-  field.innerHTML = unit(null, true) + `<div class="enemies">${B.enemies.map(e => unit(e, false)).join('')}</div>` + (targeting ? '<div class="hint">대상을 선택하세요</div>' : '');
+  field.innerHTML = unit(null, true) + `<div class="enemies">${B.enemies.map(e => unit(e, false)).join('')}</div>` + (targeting ? `<div class="hint">${B.selPot !== null ? `${POTIONS[G.potions[B.selPot]].n}: ` : ''}대상을 선택하세요</div>` : '');
   B.hits.clear(); B.lunge = null;
 
   const n = B.hand.length;
@@ -867,7 +1047,7 @@ function renderCombat() {
     return cardHTML(c, `${playable ? '' : 'cant'} ${sel ? 'sel' : ''}" data-i="${i}" style="transform: ${sel ? 'translateY(-26%) scale(1.08)' : `rotate(${rot}deg) translateY(${lift}px)`}; z-index:${sel ? 30 : i}`);
   }).join('');
   dock.innerHTML = `<div class="left">
-      <div class="orb ${B.energy ? '' : 'empty'}" title="에너지">${B.energy}/3</div>
+      <div class="orb ${B.energy ? '' : 'empty'}" title="에너지">${B.energy}/${B.maxE}</div>
       <button class="pile" id="drawpile" title="뽑을 카드 더미">뽑기 <b>${B.draw.length}</b></button>
     </div>
     <div class="hand" id="hand">${cards}</div>
@@ -891,7 +1071,7 @@ function renderCombat() {
     el.addEventListener('mouseleave', () => { renderCardTransform(el); });
   });
   field.querySelectorAll('.enemy.targetable').forEach(el => {
-    el.addEventListener('click', ev => { ev.stopPropagation(); const e = B.enemies.find(x => x.id === el.dataset.eid); playCard(B.sel, e); });
+    el.addEventListener('click', ev => { ev.stopPropagation(); const e = B.enemies.find(x => x.id === el.dataset.eid); if (B.selPot !== null) usePotion(B.selPot, e); else playCard(B.sel, e); });
     el.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); el.click(); } });
   });
   $('#endturn').onclick = () => endTurn();
@@ -911,6 +1091,7 @@ function renderCardTransform(el) {
 
 function clickCard(i) {
   if (B.busy || B.over) return;
+  B.selPot = null;
   if (B.sel === i) { B.sel = null; renderCombat(); return; }
   const c = B.hand[i]; const d = CARDS[c.id]; const cost = costOf(c);
   if (cost === 'U') { toast('이 카드는 사용할 수 없습니다.'); return; }
@@ -958,13 +1139,13 @@ function playCard(i, target) {
 function checkEnd() {
   if (B.over) return true;
   if (B.dying || G.hp <= 0) { B.over = true; setTimeout(gameOver, 900); return true; }
-  if (!alive().length) { B.over = true; setTimeout(winCombat, 800); return true; }
+  if (!alive().some(e => !e.minion)) { alive().forEach(e => { e.dead = true; }); B.over = true; renderCombat(); setTimeout(winCombat, 800); return true; }
   return false;
 }
 
 async function endTurn() {
   if (B.busy || B.over) return;
-  B.busy = true; B.sel = null;
+  B.busy = true; B.sel = null; B.selPot = null; closePotMenu();
   // end-of-turn effects in hand
   for (const c of B.hand) {
     if (c.id === 'burn') damagePlayer(2);
@@ -983,7 +1164,7 @@ async function endTurn() {
 
   for (const e of [...B.enemies]) {
     if (e.dead || B.over) continue;
-    e.block = 0;
+    if (!e.st.barricade) e.block = 0;
     const m = e.intent;
     if (m.dmg !== undefined) {
       B.lunge = e.id;
@@ -995,6 +1176,7 @@ async function endTurn() {
       }
     }
     if (!e.dead) m.fx?.(e);
+    if (e.pending === m) e.pending = null;
     e.hist.push(m.nm); e.last = m.nm;
     renderCombat();
     if (checkEnd()) return;
@@ -1005,9 +1187,9 @@ async function endTurn() {
     if (e.st.ritual) { if (e.fresh) e.fresh = 0; else { e.st.str += e.st.ritual; floatOn(e, `힘 +${e.st.ritual}`, 'small'); } }
     if (e.st.metal && e.asleep > 0) enemyBlock(e, e.st.metal);
     for (const k of ['vuln', 'weak']) if (e.st[k]) e.st[k]--;
+    if (e.skipRound) { e.skipRound = 0; continue; }
     e.turn++;
-    if (!e.splitting || e.gone) e.intent = ENEMIES[e.key].ai(e, e.turn);
-    else if (e.intent.nm !== '분열') e.intent = ENEMIES[e.key].ai(e, e.turn);
+    e.intent = e.pending || ENEMIES[e.key].ai(e, e.turn);
   }
   if (checkEnd()) return;
   startTurn();
@@ -1016,13 +1198,22 @@ async function endTurn() {
 function winCombat() {
   let healed = 0;
   if (has('burning')) healed += heal(6);
+  if (has('blackblood')) healed += heal(12);
   if (has('meat') && G.hp <= G.maxHp / 2) healed += heal(12);
   const kind = B.kind;
   B = null;
-  if (kind === 'B') { victory(); return; }
+  if (kind === 'B') { G.bosses = (G.bosses || 0) + 1; if (G.act >= 2) { victory(); return; } }
   if (kind === 'E') G.elites++;
-  const gold = Math.round((kind === 'E' ? rint(25, 35) : rint(10, 20)) * (has('idol') ? 1.25 : 1));
-  showReward({ gold, relic: kind === 'E' ? randomRelic() : null, cards: rollCards(3, kind === 'E' ? 10 : 3), healed });
+  let potion = null;
+  if (kind === 'B' || rnd(100) < G.potChance + (kind === 'E' ? 10 : 0)) { potion = randomPotion(); G.potChance = Math.max(10, G.potChance - 10); } else G.potChance = Math.min(80, G.potChance + 10);
+  if (has('sozu')) potion = null;
+  if (kind === 'B') {
+    const bossRelics = shuffle(Object.keys(RELICS).filter(k => RELICS[k].boss && !has(k))).slice(0, 3);
+    showReward({ gold: rint(95, 105), potion, cards: rollCards(3, 100), bossRelics, healed, boss: true, next: () => startAct(G.act + 1) });
+    return;
+  }
+  const gold = Math.round((kind === 'E' ? rint(25, 35) : rint(10, 20)) * (has('idol') ? 1.25 : 1) * (G.act === 2 ? 1.3 : 1));
+  showReward({ gold, potion, relic: kind === 'E' ? randomRelic() : null, cards: rollCards(3, kind === 'E' ? 10 : 3 + (G.act - 1) * 4), healed });
 }
 
 function rollCards(n, rareChance) {
@@ -1042,23 +1233,38 @@ function showReward(rw) {
   const draw = () => {
     const items = [];
     if (rw.gold) items.push(`<button class="reward" data-k="gold"><span class="gold" style="color:var(--candle)">${IC.coin}</span><span>골드 ${rw.gold}</span></button>`);
+    if (rw.potion) items.push(`<button class="reward" data-k="potion"><span>${flask(POTIONS[rw.potion].col)}</span><span>${POTIONS[rw.potion].n}<small>${POTIONS[rw.potion].d}</small></span></button>`);
+    if (rw.bossRelics) items.push(`<button class="reward" data-k="boss"><span style="color:var(--candle)">${IC.tower}</span><span>보스 유물 선택<small>강력한 유물 3개 중 1개를 고릅니다.</small></span></button>`);
     if (rw.relic) items.push(`<button class="reward" data-k="relic">${relicHTML(rw.relic)}<span>${RELICS[rw.relic].n}<small>${RELICS[rw.relic].d}</small></span></button>`);
     if (rw.cards) items.push(`<button class="reward" data-k="cards"><span style="color:var(--muted)">${IC.deck}</span><span>덱에 카드 추가</span></button>`);
     setScreen(`<div class="pad"><div class="center">
-      <h2>승리</h2>
-      <p class="lead">${rw.healed ? `불타는 피가 상처를 닫습니다. 체력 +${rw.healed}` : '전리품을 챙기세요.'}</p>
+      <h2>${rw.boss ? `${ENEMIES[G.bossKey[0]].n} 격파` : '승리'}</h2>
+      <p class="lead">${rw.boss ? '보스가 쓰러졌습니다. 전리품을 챙기고 다음 막으로 올라가세요. 다음 막에 들어서면 체력이 모두 회복됩니다.' : rw.healed ? `상처가 아물어 갑니다. 체력 +${rw.healed}` : '전리품을 챙기세요.'}</p>
       <div class="rewardlist">${items.join('')}</div>
-      <button class="btn primary" id="proceed">계속 나아가기</button>
+      <button class="btn primary" id="proceed">${rw.boss ? `${G.act + 1}막으로 올라가기` : '계속 나아가기'}</button>
     </div></div>`);
     document.querySelectorAll('.reward').forEach(b => b.onclick = () => {
       const k = b.dataset.k;
-      if (k === 'gold') { G.gold += rw.gold; rw.gold = 0; draw(); }
+      if (k === 'gold') { if (!addGold(rw.gold)) toast('엑토플라즘 때문에 골드를 얻을 수 없습니다.'); rw.gold = 0; draw(); }
+      if (k === 'potion') { if (addPotion(rw.potion)) { rw.potion = null; draw(); } }
+      if (k === 'boss') showBossRelics(rw.bossRelics, id => { if (id) { giveRelic(id); toast(`<b>${RELICS[id].n}</b> 획득`); rw.bossRelics = null; } draw(); });
       if (k === 'relic') { giveRelic(rw.relic); toast(`<b>${RELICS[rw.relic].n}</b> 획득`); rw.relic = null; draw(); }
       if (k === 'cards') showCardChoice(rw.cards, c => { if (c) { G.deck.push(c); toast(`<b>${cardName(c)}</b>을(를) 덱에 추가했습니다.`); } rw.cards = null; draw(); }, draw);
     });
-    $('#proceed').onclick = () => { if (rw.gold) G.gold += rw.gold; showMap(); };
+    $('#proceed').onclick = () => { if (rw.gold) addGold(rw.gold); (rw.next || showMap)(); };
   };
   draw();
+}
+
+function showBossRelics(ids, done) {
+  setScreen(`<div class="pad"><div class="center">
+    <h2>보스 유물</h2>
+    <p class="lead">하나만 가져갈 수 있습니다.</p>
+    <div class="opts">${ids.map(id => `<button class="opt" data-id="${id}">${relicHTML(id, true).replace('<button', '<span').replace('</button>', '</span>')}<span class="t">${RELICS[id].n}</span><small>${RELICS[id].d}</small></button>`).join('')}</div>
+    <button class="btn" id="back">뒤로</button>
+  </div></div>`);
+  document.querySelectorAll('.opt[data-id]').forEach(b => b.onclick = () => done(b.dataset.id));
+  $('#back').onclick = () => done(null);
 }
 
 function showCardChoice(cards, done, back) {
@@ -1084,11 +1290,13 @@ function showRest() {
     <h2>모닥불</h2>
     <p class="lead">무너진 계단참에서 불씨가 조용히 타오른다. 잠시 숨을 고를 수 있다.</p>
     <div class="opts">
-      <button class="opt" id="rest">${IC.rest}<span class="t">휴식</span><small>체력을 ${amt} 회복합니다.<br>(${G.hp} → ${Math.min(G.maxHp, G.hp + amt)})</small></button>
+      <button class="opt" id="rest" ${has('coffee') ? 'disabled' : ''}>${IC.rest}<span class="t">휴식</span><small>${has('coffee') ? '커피 드리퍼 때문에 잠들 수 없습니다.' : `체력을 ${amt} 회복합니다.<br>(${G.hp} → ${Math.min(G.maxHp, G.hp + amt)})`}</small></button>
       <button class="opt" id="smith" ${up.length ? '' : 'disabled'}>${IC.anvil}<span class="t">재련</span><small>카드 1장을 강화합니다.</small></button>
     </div>
+    <button class="btn" id="skiprest">그냥 지나가기</button>
   </div></div>`);
   $('#rest').onclick = () => { heal(amt); toast(`체력을 회복했습니다.`); showMap(); };
+  $('#skiprest').onclick = showMap;
   $('#smith').onclick = () => pickCard('강화할 카드 선택', up, 'upgrade', c => { c.up = true; toast(`<b>${cardName(c)}</b> 강화 완료`); showMap(); });
 }
 
@@ -1100,12 +1308,14 @@ function showShop() {
   const sale = rnd(5); stock[sale].p = Math.floor(stock[sale].p / 2); stock[sale].sale = 1;
   const rid = randomRelic();
   const relic = rid ? { id: rid, p: rint(140, 170) } : null;
+  const pots = Array.from({ length: 3 }, () => ({ id: randomPotion(), p: rint(48, 75) }));
   let removed = false;
   const draw = () => {
     setScreen(`<div class="pad"><div class="center">
       <h2>떠돌이 상인</h2>
       <p class="lead">"보고 가시게. 골드만 있으면 뭐든 팔지."</p>
       <div class="shopgrid">${stock.map((s, i) => `<button class="ware" data-i="${i}" ${s.sold || G.gold < s.p ? 'disabled' : ''}>${s.sold ? '<div class="card status" style="opacity:.3"></div>' : cardHTML(s.c)}<span class="price ${G.gold < s.p ? 'no' : ''}">${s.sold ? '판매됨' : `${IC.coin.replace('<svg', '<svg width="16" height="16"')}${s.p}${s.sale ? ' 할인!' : ''}`}</span></button>`).join('')}</div>
+      <div class="shoprow">${pots.map((o, i) => `<button class="relicoffer pbuy" data-i="${i}" ${o.sold || G.gold < o.p || has('sozu') ? 'disabled' : ''}><span class="pot big">${flask(POTIONS[o.id].col)}</span><span>${POTIONS[o.id].n} · <span class="price ${G.gold < o.p ? 'no' : ''}" style="display:inline">${o.sold ? '판매됨' : o.p}</span><small>${POTIONS[o.id].d}</small></span></button>`).join('')}</div>
       <div class="shoprow">
         ${relic ? `<button class="relicoffer" id="buyrelic" ${relic.sold || G.gold < relic.p ? 'disabled' : ''}>${relicHTML(relic.id)}<span>${RELICS[relic.id].n} · <span class="price ${G.gold < relic.p ? 'no' : ''}" style="display:inline">${relic.sold ? '판매됨' : relic.p}</span><small>${RELICS[relic.id].d}</small></span></button>` : ''}
         <button class="relicoffer" id="remove" ${removed || G.gold < G.removeCost ? 'disabled' : ''}><span style="color:var(--blood)">${IC.deck}</span><span>카드 제거 · <span class="price ${G.gold < G.removeCost ? 'no' : ''}" style="display:inline">${removed ? '사용함' : G.removeCost}</span><small>덱에서 카드 1장을 영구히 제거합니다.</small></span></button>
@@ -1116,6 +1326,7 @@ function showShop() {
       const s = stock[+b.dataset.i]; if (s.sold || G.gold < s.p) return;
       G.gold -= s.p; s.sold = 1; G.deck.push(s.c); toast(`<b>${cardName(s.c)}</b> 구매`); draw();
     });
+    document.querySelectorAll('.pbuy').forEach(b => b.onclick = () => { const o = pots[+b.dataset.i]; if (o.sold || G.gold < o.p) return; if (!addPotion(o.id)) return; G.gold -= o.p; o.sold = 1; toast(`<b>${POTIONS[o.id].n}</b> 구매`); draw(); });
     if (relic) $('#buyrelic').onclick = () => { if (relic.sold || G.gold < relic.p) return; G.gold -= relic.p; relic.sold = 1; giveRelic(relic.id); toast(`<b>${RELICS[relic.id].n}</b> 구매`); draw(); };
     $('#remove').onclick = () => { if (removed || G.gold < G.removeCost) return; pickCard('제거할 카드 선택', G.deck, 'remove', c => { G.deck.splice(G.deck.indexOf(c), 1); G.gold -= G.removeCost; G.removeCost += 25; removed = true; toast(`<b>${cardName(c)}</b> 제거`); draw(); }, draw); };
     $('#leave').onclick = showMap;
@@ -1136,13 +1347,17 @@ function showTreasure() {
     </div>
     <button class="btn primary" id="take">챙기고 나아가기</button>
   </div></div>`);
-  $('#take').onclick = () => { if (rid) giveRelic(rid); G.gold += gold; showMap(); };
+  $('#take').onclick = () => { if (rid) giveRelic(rid); addGold(gold); showMap(); };
 }
 
 /* ---------- events ---------- */
 const EVENTS = [
+  { t: '떠돌이 연금술사', d: '부글거리는 솥 앞에서 연금술사가 손을 내민다. "재료가 조금 모자라. 피 몇 방울이면 좋은 걸 만들어 주지."', o: [
+    { l: '피를 나눠준다', s: '체력 5 잃음 · 무작위 물약 2개', need: () => G.hp > 5, f: () => { G.hp -= 5; const got = [randomPotion(), randomPotion()].filter(id => addPotion(id)); return got.length ? `${got.map(id => `<b>${POTIONS[id].n}</b>`).join(', ')}을(를) 받았다.` : '물약을 담을 자리가 없어 연금술사가 혀를 찬다.'; } },
+    { l: '물약 허리띠를 산다', s: '골드 60 · 물약 슬롯 +2', need: () => G.gold >= 60 && !has('belt'), f: () => { G.gold -= 60; giveRelic('belt'); return '허리띠에 빈 병 걸이가 두 개 더 생겼다.'; } },
+    { l: '그냥 지나간다', s: '아무 일도 일어나지 않음', f: () => '솥에서 보라색 연기가 피어오른다.' }] },
   { t: '황금 신상', d: '무너진 제단 위에 사람 머리만 한 황금 신상이 놓여 있다. 받침돌에 연결된 사슬이 천장 어딘가로 이어져 있다.', o: [
-    { l: '신상을 챙긴다', s: '골드 +110 · 저주 「부상」을 얻음', f: () => { G.gold += 110; G.deck.push(mk('injury')); return '신상을 들어 올리는 순간 천장이 무너진다. 겨우 빠져나왔지만 다리를 심하게 다쳤다.'; } },
+    { l: '신상을 챙긴다', s: '골드 +110 · 저주 「부상」을 얻음', f: () => { addGold(110); G.deck.push(mk('injury')); return '신상을 들어 올리는 순간 천장이 무너진다. 겨우 빠져나왔지만 다리를 심하게 다쳤다.'; } },
     { l: '그냥 지나간다', s: '아무 일도 일어나지 않음', f: () => '욕심을 접고 발걸음을 옮긴다.' }] },
   { t: '맑은 샘', d: '돌 틈에서 차가운 물이 솟아오른다. 물 표면에 내 얼굴이 아닌 누군가의 얼굴이 비친다.', o: [
     { l: '물을 마신다', s: () => `체력 ${Math.floor(G.maxHp / 3)} 회복`, f: () => { heal(Math.floor(G.maxHp / 3)); return '몸 깊은 곳까지 시원해진다.'; } },
@@ -1155,7 +1370,7 @@ const EVENTS = [
     { l: '도넛을 먹는다', s: '최대 체력 +5', f: () => { G.maxHp += 5; G.hp += 5; return '이상하게 힘이 솟는다.'; } },
     { l: '상자를 연다', s: '무작위 유물 · 저주 「후회」를 얻음', f: () => { const r = randomRelic(); if (r) giveRelic(r); G.deck.push(mk('regret')); return r ? `상자 안에서 <b>${RELICS[r].n}</b>을(를) 찾았다. 하지만 뭔가 꺼림칙하다.` : '상자는 비어 있었다. 꺼림칙한 기분만 남는다.'; } }] },
   { t: '매복', d: '통로가 좁아지는 곳에서 낮게 그르렁대는 소리가 들린다. 뭔가가 기다리고 있다.', o: [
-    { l: '싸운다', s: '전투 · 승리 시 골드 추가', f: () => { startCombat(pick(ENC.hard), 'M'); return false; } },
+    { l: '싸운다', s: '전투 · 승리 시 골드 추가', f: () => { startCombat(pick(ENC[G.act].hard), 'M'); return false; } },
     { l: '조심스레 돌아간다', s: '체력 5 잃음', need: () => G.hp > 5, f: () => { G.hp -= 5; return '날카로운 바위에 긁혔지만 무사히 빠져나왔다.'; } }] },
   { t: '버려진 서재', d: '먼지 쌓인 책장 사이에 세 권의 책이 펼쳐져 있다. 각 페이지에서 희미한 빛이 새어 나온다.', o: [
     { l: '책을 읽는다', s: '카드 3장 중 1장 획득', f: next => { showCardChoice(rollCards(3, 12), c => { if (c) G.deck.push(c); next(c ? `<b>${cardName(c)}</b>의 기술을 익혔다.` : '아무것도 마음에 들지 않았다.'); }); return null; } },
@@ -1221,7 +1436,7 @@ function pickCard(title, cards, mode, done, cancel) {
 
 /* ---------- end screens ---------- */
 function statsHTML() {
-  return `<dl><dt>도달한 층</dt><dd>${G.floor}</dd><dt>처치한 적</dt><dd>${G.kills}</dd><dt>쓰러뜨린 정예</dt><dd>${G.elites}</dd><dt>덱 크기</dt><dd>${G.deck.length}장</dd><dt>유물</dt><dd>${G.relics.length}개</dd><dt>골드</dt><dd>${G.gold}</dd></dl>`;
+  return `<dl><dt>도달한 막</dt><dd>${G.act}막</dd><dt>도달한 층</dt><dd>${G.floor}</dd><dt>처치한 적</dt><dd>${G.kills}</dd><dt>쓰러뜨린 정예</dt><dd>${G.elites}</dd><dt>덱 크기</dt><dd>${G.deck.length}장</dd><dt>유물</dt><dd>${G.relics.length}개</dd><dt>골드</dt><dd>${G.gold}</dd></dl>`;
 }
 function gameOver() {
   B = null; G.screen = 'over';
@@ -1236,8 +1451,8 @@ function gameOver() {
 function victory() {
   G.screen = 'win';
   setScreen(`<div class="pad"><div class="center end">
-    <h2 style="color:var(--candle)">1막 정복</h2>
-    <p class="lead">${ENEMIES[G.bossKey[0]].n}이(가) 쓰러지자 위층으로 향하는 계단이 모습을 드러낸다.</p>
+    <h2 style="color:var(--candle)">첨탑 정복</h2>
+    <p class="lead">${ENEMIES[G.bossKey[0]].n}이(가) 쓰러지고 도시의 종탑이 멈춘다. 철갑 전사는 첨탑의 두 막을 모두 올랐다.</p>
     ${statsHTML()}
     <button class="btn primary" id="again">새로운 등반</button>
   </div></div>`);
@@ -1247,6 +1462,7 @@ function victory() {
 /* ---------- title ---------- */
 function showTitle() {
   G = null; B = null;
+  document.body.classList.remove('act2');
   renderBar();
   $('#screen').innerHTML = `<div id="title"><div class="center">
     <svg class="spire-art" viewBox="0 0 200 220" aria-hidden="true">
@@ -1257,13 +1473,14 @@ function showTitle() {
     </svg>
     <span class="sub">덱 빌딩 로그라이크</span>
     <h1>첨탑을 오르는 자</h1>
-    <p class="lead">철갑 전사가 되어 15층의 첨탑 1막을 오르세요. 카드를 모아 덱을 다듬고, 적의 의도를 읽고, 꼭대기의 보스를 쓰러뜨리면 승리합니다.</p>
+    <p class="lead">철갑 전사가 되어 지하 묘지와 도시, 두 막으로 이루어진 첨탑을 오르세요. 카드를 모아 덱을 다듬고, 물약을 아껴 쓰고, 적의 의도를 읽어 두 보스를 모두 쓰러뜨리면 승리합니다.</p>
     <button class="btn primary" id="start" style="font-size:22px;padding:12px 34px">등반 시작</button>
     <div class="how">
       <div><b>카드 사용</b>카드를 눌러 사용합니다. 대상이 필요하면 적을 누르세요. 숫자 키 1–9로도 고를 수 있습니다.</div>
       <div><b>에너지와 턴</b>매 턴 에너지 3, 카드 5장. 남은 카드는 턴 종료(E) 때 버려집니다.</div>
       <div><b>적의 의도</b>적 머리 위 아이콘이 다음 행동입니다. 숫자는 받게 될 피해입니다.</div>
       <div><b>방어도</b>내 턴이 시작되면 사라집니다. 적의 공격 직전에 쌓으세요.</div>
+      <div><b>물약</b>상단의 병을 눌러 마십니다. 전투 보상과 상점에서 얻고, 최대 3개까지 들고 다닙니다.</div>
     </div>
   </div></div>`;
   $('#start').onclick = newRun;
